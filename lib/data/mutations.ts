@@ -1,19 +1,27 @@
 import type { Supabase } from "@/lib/db/client";
 import type { LocalDate } from "@/lib/domain/dates";
-import type { Car, FuelLog, FuelType, Term, TermKind } from "@/lib/domain/model";
+import type { FuelLog, FuelType, Term, TermKind } from "@/lib/domain/model";
 import type { Minor } from "@/lib/domain/money";
 import { nextAfterDone } from "@/lib/domain/terms";
-import { toCar } from "./snapshot";
 import type { Snapshot } from "./snapshot";
 
 export function newId(): string {
   return crypto.randomUUID();
 }
 
+const NETWORK = /Failed to fetch|NetworkError|network|Load failed|fetch failed/i;
+
+/** Błąd sieci (brak zasięgu), a nie odmowa serwera. */
+export function isNetworkError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : typeof error === "object" && error && "message" in error ? String(error.message) : String(error);
+  return NETWORK.test(message);
+}
+
 /** Komunikat dla człowieka z błędu Supabase/RPC. */
 export function errorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : typeof error === "object" && error && "message" in error ? String(error.message) : String(error);
-  if (/Failed to fetch|NetworkError|network/i.test(message)) return "Brak połączenia. Spróbuj, gdy wróci internet.";
+  if (NETWORK.test(message)) return "Brak połączenia. Spróbuj, gdy wróci internet.";
+  if (/check constraint|violates/i.test(message)) return "Któraś wartość jest poza zakresem — sprawdź pola formularza.";
   if (/term_not_found/.test(message)) return "Nie znaleziono terminu — odśwież aplikację.";
   return message;
 }
@@ -66,12 +74,19 @@ function termRow(carId: string, f: TermForm) {
   };
 }
 
-/** Nowe auto z terminami (z kreatora). */
-export async function addCar(supabase: Supabase, input: { car: CarForm; terms: TermForm[]; sortOrder: number }): Promise<Car> {
-  const { data } = check(await supabase.from("cars").insert({ ...carRow(input.car), sort_order: input.sortOrder }).select("*").single());
-  const car = toCar(data!);
-  if (input.terms.length > 0) check(await supabase.from("terms").insert(input.terms.map((t) => termRow(car.id, t))));
-  return car;
+/**
+ * Nowe auto z terminami (z kreatora). Id nadaje klient, więc ponowienie po zerwanym połączeniu
+ * nie tworzy drugiego auta ani zdublowanych terminów.
+ */
+export async function addCar(
+  supabase: Supabase,
+  input: { id: string; car: CarForm; terms: (TermForm & { id: string })[]; sortOrder: number },
+): Promise<{ id: string }> {
+  check(await supabase.from("cars").upsert({ id: input.id, ...carRow(input.car), sort_order: input.sortOrder }, { onConflict: "id", ignoreDuplicates: true }));
+  if (input.terms.length > 0) {
+    check(await supabase.from("terms").upsert(input.terms.map((t) => ({ id: t.id, ...termRow(input.id, t) })), { onConflict: "id", ignoreDuplicates: true }));
+  }
+  return { id: input.id };
 }
 
 export async function updateCar(supabase: Supabase, input: { id: string; car: CarForm }): Promise<void> {

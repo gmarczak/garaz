@@ -6,7 +6,10 @@ import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { FuelForm } from "@/features/fuel/FuelForm";
-import { useSnapshot, useToday } from "@/lib/data/hooks";
+import { useMutationState } from "@tanstack/react-query";
+import { useToast } from "@/components/ui/Toast";
+import { fuelMutationKey, useFuelMutation, useSnapshot, useToday } from "@/lib/data/hooks";
+import { errorMessage, type FuelDraft } from "@/lib/data/mutations";
 
 type OpenFuel = (carId?: string) => void;
 const FuelContext = createContext<OpenFuel>(() => {});
@@ -18,6 +21,19 @@ export function AppShell({ children }: { children: ReactNode }) {
   const today = useToday(snapshot);
   const [fueling, setFueling] = useState<{ carId?: string } | null>(null);
   const open: OpenFuel = useCallback((carId) => setFueling({ carId }), []);
+  const toast = useToast();
+  const fuelMutation = useFuelMutation();
+  const waiting = useMutationState({
+    filters: { mutationKey: fuelMutationKey, status: "pending", predicate: (m) => m.state.isPaused || m.state.failureCount > 0 },
+  }).length;
+
+  function saveFuel(draft: FuelDraft) {
+    setFueling(null);
+    fuelMutation.mutate(draft, {
+      onSuccess: () => toast({ message: "Zapisano tankowanie" }),
+      onError: (err) => toast({ message: `Nie zapisano tankowania: ${errorMessage(err)}`, durationMs: 8000 }),
+    });
+  }
 
   if (isPending && !snapshot) {
     return <div className="mx-auto min-h-dvh max-w-lg px-5 pt-10 text-muted">Wczytuję…</div>;
@@ -49,7 +65,14 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <FuelContext.Provider value={open}>
-      <div className="mx-auto min-h-dvh max-w-lg pb-[calc(5.5rem+env(safe-area-inset-bottom))]">{children}</div>
+      <div className="mx-auto min-h-dvh max-w-lg pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
+        {waiting > 0 && (
+          <p role="status" className="mx-5 mt-4 rounded-xl bg-surface px-4 py-2.5 text-sm">
+            {waiting === 1 ? "1 tankowanie czeka" : `${waiting} tankowania czekają`} na internet — wyślę automatycznie.
+          </p>
+        )}
+        {children}
+      </div>
 
       <nav aria-label="Główna nawigacja" className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-bg pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3">
         <div className="mx-auto flex max-w-lg items-center justify-around px-2">
@@ -68,7 +91,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </nav>
 
       <Modal open={fueling !== null} onClose={() => setFueling(null)} title="Tankowanie">
-        {fueling && <FuelForm snapshot={snapshot} today={today} carId={fueling.carId} onDone={() => setFueling(null)} />}
+        {fueling && <FuelForm snapshot={snapshot} today={today} carId={fueling.carId} onSave={saveFuel} />}
       </Modal>
     </FuelContext.Provider>
   );

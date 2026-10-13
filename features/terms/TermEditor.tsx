@@ -19,14 +19,27 @@ function initialDue(kind: TermKind, today: LocalDate): LocalDate | null {
 }
 
 /** Dodawanie i edycja terminu (OC, przegląd, olej, opony, inny). */
-export function TermEditor({ carId, term, today, onDone }: { carId: string; term?: Term; today: LocalDate; onDone: () => void }) {
-  const [kind, setKind] = useState<TermKind>(term?.kind ?? "insurance");
+export function TermEditor({
+  carId,
+  term,
+  initialKind = "insurance",
+  today,
+  onDone,
+}: {
+  carId: string;
+  term?: Term;
+  initialKind?: TermKind;
+  today: LocalDate;
+  onDone: () => void;
+}) {
+  const defaults = TERM_DEFAULTS[term?.kind ?? initialKind];
+  const [kind, setKind] = useState<TermKind>(term?.kind ?? initialKind);
   const [title, setTitle] = useState(term?.title ?? "");
-  const [dueOn, setDueOn] = useState<string>(term ? (term.dueOn ?? "") : "");
+  const [dueOn, setDueOn] = useState<string>(term ? (term.dueOn ?? "") : (initialDue(initialKind, today) ?? ""));
   const [dueKm, setDueKm] = useState(term?.dueKm != null ? String(term.dueKm) : "");
-  const [months, setMonths] = useState<number | null>(term ? term.intervalMonths : TERM_DEFAULTS.insurance.intervalMonths);
-  const [intervalKm, setIntervalKm] = useState(term?.intervalKm != null ? String(term.intervalKm) : "");
-  const [notify, setNotify] = useState(term?.notifyDays ?? TERM_DEFAULTS.insurance.notifyDays);
+  const [months, setMonths] = useState<number | null>(term ? term.intervalMonths : defaults.intervalMonths);
+  const [intervalKm, setIntervalKm] = useState(term ? (term.intervalKm != null ? String(term.intervalKm) : "") : defaults.intervalKm != null ? String(defaults.intervalKm) : "");
+  const [notify, setNotify] = useState(term?.notifyDays ?? defaults.notifyDays);
   const [error, setError] = useState<string | null>(null);
   const add = useAction(addTerm);
   const update = useAction(updateTerm);
@@ -48,7 +61,7 @@ export function TermEditor({ carId, term, today, onDone }: { carId: string; term
     const everyKm = usesKm(kind) && intervalKm.trim() ? parseKm(intervalKm) : null;
     if (kind === "other" && !title.trim()) return setError("Nazwij termin, np. „Rozrząd” albo „Winieta”.");
     if (usesKm(kind) && dueKm.trim() && km === null) return setError("Przebieg wpisz w pełnych kilometrach.");
-    if (usesKm(kind) && intervalKm.trim() && (everyKm === null || everyKm < 100)) return setError("Co ile km — najmniej 100.");
+    if (usesKm(kind) && intervalKm.trim() && (everyKm === null || everyKm < 100 || everyKm > 200000)) return setError("Co ile km — od 100 do 200 000.");
     if (!dueOn && km === null) return setError(usesKm(kind) ? "Podaj datę albo przebieg." : "Podaj datę.");
     setError(null);
     const form: TermForm = {

@@ -45,6 +45,9 @@ export function CompleteForm({ term, car, terms, today, onDone }: { term: Term; 
     e.preventDefault();
     if (chosen.length === 0) return setError("Zaznacz, co zostało zrobione.");
     if (odometer.trim() && km === null) return setError("Przebieg wpisz w pełnych kilometrach.");
+    if (km === null && chosen.some((t) => t.intervalKm !== null || t.dueKm !== null)) {
+      return setError("Wpisz przebieg — od niego liczę następny termin w kilometrach.");
+    }
     const costMinor = cost.trim() ? parseAmount(cost) : null;
     if (cost.trim() && (costMinor === null || costMinor < 0)) return setError("Koszt wygląda na błędny, np. 250 albo 99,90.");
     setError(null);

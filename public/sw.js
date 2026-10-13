@@ -1,8 +1,8 @@
 /* Service worker: powłoka offline + powiadomienia push. Bez zależności, żeby był przewidywalny. */
-const VERSION = "garaz-1";
+const VERSION = "garaz-2";
 const SHELL_CACHE = `shell-${VERSION}`;
 const STATIC_CACHE = `static-${VERSION}`;
-const SHELL = ["/", "/transactions", "/plan", "/accounts", "/settings", "/manifest.webmanifest", "/icon-192.png"];
+const SHELL = ["/", "/cars/new", "/settings", "/manifest.webmanifest", "/icon-192.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -75,7 +75,7 @@ self.addEventListener("push", (event) => {
       body: data.body,
       icon: "/icon-192.png",
       badge: "/badge-96.png",
-      tag: data.tag || "habits",
+      tag: data.tag || "garaz",
       data: { url: data.url || "/" },
     }),
   );

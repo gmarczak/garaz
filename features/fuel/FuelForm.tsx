@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useToast } from "@/components/ui/Toast";
 import { btnPrimary, errorText, field, label, labelText } from "@/components/ui/styles";
-import { useFuelMutation } from "@/lib/data/hooks";
-import { errorMessage, newId } from "@/lib/data/mutations";
+import { newId, type FuelDraft } from "@/lib/data/mutations";
 import type { Snapshot } from "@/lib/data/snapshot";
 import type { LocalDate } from "@/lib/domain/dates";
 import { parseAmount } from "@/lib/domain/money";
@@ -19,7 +17,18 @@ function defaultCar(snapshot: Snapshot, carId?: string): string {
   return last?.carId ?? active[0]?.id ?? "";
 }
 
-export function FuelForm({ snapshot, today, carId, onDone }: { snapshot: Snapshot; today: LocalDate; carId?: string; onDone: () => void }) {
+export function FuelForm({
+  snapshot,
+  today,
+  carId,
+  onSave,
+}: {
+  snapshot: Snapshot;
+  today: LocalDate;
+  carId?: string;
+  /** Zapis w tle (kolejka offline) — formularz zamyka się od razu. */
+  onSave: (draft: FuelDraft) => void;
+}) {
   const cars = snapshot.cars.filter((c) => c.archivedAt === null);
   const [car, setCar] = useState(() => defaultCar(snapshot, carId));
   const [date, setDate] = useState(today);
@@ -29,8 +38,6 @@ export function FuelForm({ snapshot, today, carId, onDone }: { snapshot: Snapsho
   const [fullTank, setFullTank] = useState(true);
   const [station, setStation] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const mutation = useFuelMutation();
-  const toast = useToast();
 
   const current = cars.find((c) => c.id === car);
   const lastKm = current?.odometerKm ?? null;
@@ -46,11 +53,7 @@ export function FuelForm({ snapshot, today, carId, onDone }: { snapshot: Snapsho
     if (l === null) return setError("Wpisz litry, np. 42,5.");
     if (minor === null || minor <= 0) return setError("Wpisz kwotę z paragonu.");
     setError(null);
-    mutation.mutate(
-      { id: newId(), carId: current.id, filledOn: date, odometerKm: km, liters: l, amountMinor: minor, fullTank, station: station || null },
-      { onError: (err) => toast({ message: `Nie zapisano tankowania: ${errorMessage(err)}` }) },
-    );
-    onDone();
+    onSave({ id: newId(), carId: current.id, filledOn: date, odometerKm: km, liters: l, amountMinor: minor, fullTank, station: station || null });
   }
 
   return (

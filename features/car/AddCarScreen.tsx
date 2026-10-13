@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { btnPrimary, btnQuiet, chip, errorText, field, label, labelText, sectionTitle } from "@/components/ui/styles";
 import { useAction, useSnapshot, useToday } from "@/lib/data/hooks";
-import { addCar, errorMessage, type CarForm, type TermForm } from "@/lib/data/mutations";
+import { addCar, errorMessage, newId, type CarForm, type TermForm } from "@/lib/data/mutations";
 import type { LocalDate } from "@/lib/domain/dates";
 import type { TermKind } from "@/lib/domain/model";
 import { parseKm } from "@/lib/domain/parse";
@@ -36,6 +36,8 @@ export function AddCarScreen() {
   const [tires, setTires] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const save = useAction(addCar);
+  // Stałe id na czas kreatora: ponowne „Dodaj auto” po błędzie sieci nie zdubluje danych
+  const [ids] = useState(() => ({ car: newId(), terms: Object.fromEntries(["insurance", "inspection", "oil", "winter_tires", "summer_tires"].map((k) => [k, newId()])) as Record<string, string> }));
   if (!snapshot || !today) return null;
 
   function next(e: React.FormEvent) {
@@ -66,7 +68,7 @@ export function AddCarScreen() {
     }
     setError(null);
     save.mutate(
-      { car, terms, sortOrder: snapshot.cars.length },
+      { id: ids.car, car, terms: terms.map((t) => ({ ...t, id: ids.terms[t.kind]! })), sortOrder: snapshot.cars.length },
       { onSuccess: (created) => router.replace(`/cars/${created.id}`), onError: (err) => setError(errorMessage(err)) },
     );
   }

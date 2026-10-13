@@ -16,17 +16,17 @@ import { useAction, useSnapshot, useToday } from "@/lib/data/hooks";
 import { archiveCar, deleteFuel, deleteService, errorMessage, setOdometer, updateCar, withOdometer } from "@/lib/data/mutations";
 import type { LocalDate } from "@/lib/domain/dates";
 import { fuelStats, formatPer100, pricePerLiter } from "@/lib/domain/fuel";
-import { carLabel, type Car, type FuelLog, type Service, type Term } from "@/lib/domain/model";
+import { carLabel, type Car, type FuelLog, type Service, type Term, type TermKind } from "@/lib/domain/model";
 import { formatMoney } from "@/lib/domain/money";
 import { parseKm } from "@/lib/domain/parse";
-import { termStatus, termTitle } from "@/lib/domain/terms";
+import { missingBasics, TERM_LABELS, termStatus, termTitle } from "@/lib/domain/terms";
 import { formatKm, formatLiters, formatPricePerLiter, formatShortDate } from "@/lib/format";
 import { CarFields, carToDraft, draftToCar, type CarDraft } from "./CarFields";
 import { ServiceForm } from "./ServiceForm";
 
 type Sheet =
   | { type: "complete"; term: Term }
-  | { type: "term"; term?: Term }
+  | { type: "term"; term?: Term; kind?: TermKind }
   | { type: "service" }
   | { type: "odometer" }
   | { type: "edit" }
@@ -62,6 +62,7 @@ export function CarScreen({ id }: { id: string }) {
     .filter((t) => t.carId === car.id && t.active)
     .map((t) => ({ term: t, status: termStatus(t, today, car.odometerKm) }))
     .sort((a, b) => (a.term.dueOn ?? "9999").localeCompare(b.term.dueOn ?? "9999"));
+  const missing = missingBasics(car.id, snapshot.terms);
   const fuel = snapshot.fuel.filter((f) => f.carId === car.id);
   const stats = fuelStats(fuel, today);
   const services = snapshot.services.filter((s) => s.carId === car.id);
@@ -91,7 +92,6 @@ export function CarScreen({ id }: { id: string }) {
         <h2 id="terms" className={sectionTitle}>
           Terminy
         </h2>
-        {terms.length === 0 && <p className="text-muted">Brak terminów. Dodaj OC, przegląd albo wymianę oleju.</p>}
         <ul className="flex flex-col">
           {terms.map(({ term, status }) => (
             <li key={term.id} className="flex items-center gap-3 border-b border-border py-3">
@@ -111,10 +111,27 @@ export function CarScreen({ id }: { id: string }) {
               )}
             </li>
           ))}
+          {!archived &&
+            missing.map((kind) => (
+              <li key={kind}>
+                <button
+                  type="button"
+                  onClick={() => setSheet({ type: "term", kind })}
+                  className="my-1.5 flex w-full items-center gap-3 rounded-2xl border-[1.5px] border-dashed border-control px-4 py-3 text-left"
+                >
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="font-semibold">{TERM_LABELS[kind]}</span>
+                    <span className="text-sm text-muted">{kind === "oil" ? "Nie ustawiono — wpisz datę albo przebieg" : "Nie ustawiono — wpisz, do kiedy jest ważne"}</span>
+                  </span>
+                  <span className="text-sm font-semibold text-accent">Ustaw</span>
+                </button>
+              </li>
+            ))}
         </ul>
-        <button type="button" onClick={() => setSheet({ type: "term" })} className={`${btnQuiet} gap-1.5 self-start px-0`}>
-          <Plus aria-hidden="true" size={18} /> Dodaj termin
+        <button type="button" onClick={() => setSheet({ type: "term" })} className={`${btnQuiet} gap-1.5 self-start px-0 text-accent`}>
+          <Plus aria-hidden="true" size={18} /> Dodaj inny termin
         </button>
+        {terms.length > 0 && <p className="text-xs text-muted">Dotknij nazwy terminu, żeby zmienić datę albo przypomnienie.</p>}
       </section>
 
       <section className="flex flex-col gap-3" aria-labelledby="fuel">
@@ -203,8 +220,8 @@ export function CarScreen({ id }: { id: string }) {
       <Modal open={sheet?.type === "complete"} onClose={close} title={sheet?.type === "complete" ? `Zrobione: ${termTitle(sheet.term)}` : ""} subtitle={car.name}>
         {sheet?.type === "complete" && <CompleteForm term={sheet.term} car={car} terms={snapshot.terms} today={today} onDone={close} />}
       </Modal>
-      <Modal open={sheet?.type === "term"} onClose={close} title={sheet?.type === "term" && sheet.term ? termTitle(sheet.term) : "Nowy termin"} subtitle={car.name}>
-        {sheet?.type === "term" && <TermEditor carId={car.id} term={sheet.term} today={today} onDone={close} />}
+      <Modal open={sheet?.type === "term"} onClose={close} title={sheet?.type === "term" ? (sheet.term ? termTitle(sheet.term) : sheet.kind ? TERM_LABELS[sheet.kind] : "Nowy termin") : ""} subtitle={car.name}>
+        {sheet?.type === "term" && <TermEditor carId={car.id} term={sheet.term} initialKind={sheet.kind} today={today} onDone={close} />}
       </Modal>
       <Modal open={sheet?.type === "service"} onClose={close} title="Wpis serwisowy" subtitle={car.name}>
         {sheet?.type === "service" && <ServiceForm car={car} today={today} onDone={close} />}

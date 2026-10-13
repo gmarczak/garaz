@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addMonths } from "./dates";
 import type { Car, Term } from "./model";
-import { describeStatus, nextAfterDone, nextSeasonDate, termStatus, upcomingTerms } from "./terms";
+import { describeStatus, missingBasics, nextAfterDone, nextSeasonDate, termStatus, upcomingTerms } from "./terms";
 
 const car: Car = { id: "c", name: "Corolla", make: "Toyota", model: "Corolla", year: 2016, plate: null, fuel: "petrol", odometerKm: 150000, sortOrder: 0, archivedAt: null };
 const term = (over: Partial<Term>): Term => ({
@@ -48,9 +48,33 @@ describe("terminy", () => {
     expect(nextAfterDone(term({ kind: "other", title: "Wycieraczki", intervalMonths: null }), "2026-10-28", null).active).toBe(false);
   });
 
+  it("wymiar bez interwału znika po wykonaniu", () => {
+    // rozrząd: data i przebieg, powtarzany tylko co km → stara data nie wisi „po terminie”
+    expect(nextAfterDone(term({ kind: "other", title: "Rozrząd", dueOn: "2026-01-01", dueKm: 150000, intervalMonths: null, intervalKm: 90000 }), "2026-10-28", 149000)).toEqual({
+      dueOn: null, dueKm: 239000, active: true, lastDoneOn: "2026-10-28",
+    });
+    // olej co rok bez interwału km: stary limit km znika
+    expect(nextAfterDone(term({ kind: "oil", anchor: "done", dueKm: 160000, intervalKm: null }), "2026-10-28", 151200)).toMatchObject({ dueOn: "2027-10-28", dueKm: null });
+  });
+
   it("sezon opon", () => {
     expect(nextSeasonDate("winter_tires", "2026-10-13")).toBe("2026-11-01");
     expect(nextSeasonDate("winter_tires", "2026-11-02")).toBe("2027-11-01");
     expect(nextSeasonDate("summer_tires", "2026-10-13")).toBe("2027-04-01");
+  });
+});
+
+describe("missingBasics", () => {
+  const base = { title: null, dueOn: "2026-12-01", dueKm: null, intervalMonths: 12, intervalKm: null, anchor: "due" as const, notifyDays: 30, lastDoneOn: null, active: true };
+  it("wskazuje brakujące OC, przegląd i olej", () => {
+    expect(missingBasics("a", [])).toEqual(["insurance", "inspection", "oil"]);
+    expect(missingBasics("a", [{ ...base, id: "1", carId: "a", kind: "insurance" }])).toEqual(["inspection", "oil"]);
+  });
+  it("nie liczy innych aut ani nieaktywnych terminów", () => {
+    const terms = [
+      { ...base, id: "1", carId: "b", kind: "insurance" as const },
+      { ...base, id: "2", carId: "a", kind: "inspection" as const, active: false },
+    ];
+    expect(missingBasics("a", terms)).toEqual(["insurance", "inspection", "oil"]);
   });
 });

@@ -37,6 +37,12 @@ select due_on = '2027-11-20' as ok_oc_next from garage.terms where id = :'oc';
 select garage.complete_terms(gen_random_uuid(), array[:'other']::uuid[], '2026-10-29');
 select not active as ok_other_done from garage.terms where id = :'other';
 
+\echo '-- termin tylko co km (rozrząd): stara data znika, przebieg przesuwa się'
+insert into garage.terms(car_id, kind, title, due_on, due_km, interval_km) values (:'car','other','Rozrząd','2026-01-01',150000,90000);
+select id as belt from garage.terms where title = 'Rozrząd' \gset
+select garage.complete_terms(gen_random_uuid(), array[:'belt']::uuid[], '2026-10-29', 151300);
+select active and due_on is null and due_km = 241300 as ok_km_only from garage.terms where id = :'belt';
+
 \echo '-- tankowanie podbija przebieg tylko w górę'
 insert into garage.fuel_logs(car_id, filled_on, odometer_km, liters, amount_minor) values (:'car','2026-10-30',151700,40.5,25110);
 insert into garage.fuel_logs(car_id, filled_on, odometer_km, liters, amount_minor) values (:'car','2026-10-01',150900,38,23000);

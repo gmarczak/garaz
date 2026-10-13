@@ -74,14 +74,17 @@ export function upcomingTerms(terms: readonly Term[], cars: readonly Car[], toda
 
 /** Jak przesunie się termin po wykonaniu (ta sama reguła co garage.complete_terms w bazie). */
 export function nextAfterDone(term: Term, doneOn: LocalDate, odometerKm: number | null): Pick<Term, "dueOn" | "dueKm" | "active" | "lastDoneOn"> {
-  const dueOn =
+  const nextOn =
     term.intervalMonths === null
       ? term.dueOn
       : term.anchor === "due" && term.dueOn !== null
         ? addMonths(term.dueOn, term.intervalMonths)
         : addMonths(doneOn, term.intervalMonths);
-  const dueKm = term.intervalKm !== null && odometerKm !== null ? odometerKm + term.intervalKm : term.dueKm;
+  const nextKm = term.intervalKm !== null && odometerKm !== null ? odometerKm + term.intervalKm : term.dueKm;
   const active = term.intervalMonths !== null || (term.intervalKm !== null && odometerKm !== null);
+  // Wymiar bez interwału po wykonaniu traci sens (stara data/przebieg zostałyby „po terminie” na zawsze)
+  const dueOn = active && term.intervalMonths === null ? null : nextOn;
+  const dueKm = active && term.intervalKm === null ? null : nextKm;
   return { dueOn, dueKm, active, lastDoneOn: doneOn };
 }
 
@@ -97,4 +100,13 @@ export function describeStatus(status: TermStatus): string {
     parts.push(k >= 0 ? `za ${k.toLocaleString("pl-PL")} km` : `${(-k).toLocaleString("pl-PL")} km po terminie`);
   }
   return parts.join(" · ");
+}
+
+/** Podstawowe terminy każdego auta — gdy ich brak, aplikacja prosi o uzupełnienie. */
+export const BASIC_KINDS: TermKind[] = ["insurance", "inspection", "oil"];
+
+/** Których podstawowych terminów auto jeszcze nie ma (wśród aktywnych). */
+export function missingBasics(carId: string, terms: readonly Term[]): TermKind[] {
+  const have = new Set(terms.filter((t) => t.carId === carId && t.active).map((t) => t.kind));
+  return BASIC_KINDS.filter((k) => !have.has(k));
 }
