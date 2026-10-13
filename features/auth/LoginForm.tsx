@@ -123,7 +123,7 @@ export function LoginForm({ linkError }: { linkError: boolean }) {
       <div className="flex flex-col gap-4">
         <Image src="/icon-192.png" alt="" width={56} height={56} className="rounded-2xl" priority />
         <h1 className="font-serif text-4xl font-semibold">Garaż</h1>
-        <p className="text-muted">Wiesz, na co idą pieniądze. To samo konto co w Nawykach.</p>
+        <p className="text-muted">Terminy auta i tankowania pod kontrolą. To samo konto co w Nawykach.</p>
       </div>
 
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
